@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>脑力带宽测试</title>
-    <!-- Supabase SDK -->
+    <!-- supabaseClient SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
     </script>
     <style>
@@ -290,7 +290,7 @@
     // ============================================================
     const SUPABASE_URL = 'https://pdjfeslunwxxweapxucf.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkamZlc2x1bnd4eHdlYXB4dWNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxNTY5NDcsImV4cCI6MjEwMDczMjk0N30.XovnzAK36826dHmnix5DD9yvMhEgho3Id78lZVmZJic';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     // ============================================================
     // 2. 📦 P 值查找表（完整 8100 条数据）
@@ -8579,7 +8579,7 @@
         shareBtn.disabled = true;
 
         try {
-            const { error } = await supabase
+            const { error } = await supabaseClient
                 .from('scores')
                 .insert([{ name: name.trim(), score: score }]);
 
@@ -8600,7 +8600,7 @@
 
     async function loadLeaderboard() {
         try {
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient
                 .from('scores')
                 .select('name, score')
                 .order('score', { ascending: false })
