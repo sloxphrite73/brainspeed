@@ -8473,7 +8473,26 @@
         const p = getP(a, b);
         return { a, b, p, answer: a * b };
     }
-
+    function calculatePartialP(correct, user, realP) {
+        const k = Math.abs(correct - user);
+        if (k === 0) return realP; // 完全正确
+    
+        let penalty = 0;
+        if (k < 10) {
+            // 个位误差：轻度惩罚
+            penalty = Math.ceil(realP * (k / 10) * 0.3);
+        } else if (k < 100) {
+            // 十位/百位误差：中度惩罚
+            penalty = Math.ceil(realP * (k / 100) * 0.6);
+        } else {
+            // 严重错误：给个辛苦分 1 分（但不能超过真实 P 值）
+            return Math.min(realP, Math.max(1, Math.floor(realP * 0.2)));
+        }
+        
+        // 确保不低于 0，且不超过真实 P 值
+        const partial = Math.max(0, realP - penalty);
+        return Math.min(realP, partial);
+    }
     function showQuestion() {
         const q = generateQuestion();
         state.currentQuestion = q;
@@ -8494,15 +8513,26 @@
             feedback.className = 'feedback wrong';
             return;
         }
-        if (val === state.currentAnswer) {
-            state.correct++;
-            state.totalP += state.currentP;
-            feedback.textContent = `✅ 正确！+${state.currentP} P`;
+    
+        const correctAns = state.currentAnswer;
+        const realP = state.currentP;
+        
+        // 计算实际应得的 P 值（部分得分）
+        const earnedP = calculatePartialP(correctAns, val, realP);
+        
+        // 累加（注意：如果完全错，earnedP 可能是 1 或 0）
+        state.totalP += earnedP;
+        state.correct++; // 仍然计入“已处理题数”
+    
+        if (val === correctAns) {
+            feedback.textContent = `✅ 完全正确！+${earnedP} P`;
             feedback.className = 'feedback correct';
         } else {
-            feedback.textContent = `❌ 错误，正确答案是 ${state.currentAnswer}`;
-            feedback.className = 'feedback wrong';
+            const diff = Math.abs(val - correctAns);
+            feedback.textContent = `⚠️ 接近！答案 ${correctAns}，差 ${diff}，仍得 +${earnedP} P (原 ${realP} P)`;
+            feedback.className = 'feedback wrong'; // 或者用橙色，但暂时保留红色以示区别
         }
+        
         updateUI();
         if (state.running && !state.finished) {
             setTimeout(showQuestion, 300);
