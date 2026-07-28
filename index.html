@@ -8442,7 +8442,10 @@
         currentAnswer: 0,
         currentP: 0,
         finished: false,
-        finalRate: 0
+        finalRate: 0,
+        timeUp: false,        // 是否已到达60秒
+        graceTimer: null,     // 缓冲期的计时器
+        waitingForSubmit: false // 是否在等待提交
     };
 
     const questionEl = document.getElementById('questionDisplay');
@@ -8485,26 +8488,61 @@
         feedback.textContent = '';
         feedback.className = 'feedback';
     }
+    function calculatePartialP(correct, user, realP) {
+        const k = Math.abs(correct - user);
+        if (k === 0) return realP;
 
+        let ratio;
+        if (k <= 20) {
+            // 新参数
+            ratio = -0.0011 * k * k + 0.00204736842105 * k + 0.899052631579;
+        } else if (k < 100) {
+            ratio = 10 / k;
+        } else {
+            ratio = 0;
+        }
+
+        // 边界保护：防止浮点数越界
+        const earned = Math.round(realP * ratio * 100) / 100;
+        return Math.min(realP, Math.max(0, earned));
+    }
     function handleSubmit() {
-        if (!state.running || state.finished) return;
+        if (!state.running && !state.waitingForSubmit) return;
+        if (state.finished) return;
+        
         const val = parseInt(answerInput.value);
         if (isNaN(val)) {
             feedback.textContent = '⚠️ 请输入数字';
             feedback.className = 'feedback wrong';
             return;
         }
+        
+        // 计算应得 P 值（部分得分逻辑同上）
+        const earnedP = calculatePartialP(state.currentAnswer, val, state.currentP);
+        state.totalP += earnedP;
+        state.correct++;
+        
+        // 显示反馈
         if (val === state.currentAnswer) {
-            state.correct++;
-            state.totalP += state.currentP;
-            feedback.textContent = `✅ 正确！+${state.currentP} P`;
+            feedback.textContent = `✅ 完全正确！+${earnedP} P`;
             feedback.className = 'feedback correct';
         } else {
-            feedback.textContent = `❌ 错误，正确答案是 ${state.currentAnswer}`;
+            feedback.textContent = `⚠️ 接近！答案 ${state.currentAnswer}，仍得 +${earnedP} P`;
             feedback.className = 'feedback wrong';
         }
         updateUI();
-        if (state.running && !state.finished) {
+        
+        // 如果是在缓冲期提交的，提交后立即结束
+        if (state.waitingForSubmit) {
+            // 清除宽限期计时器
+            if (state.graceTimer) {
+                clearInterval(state.graceTimer);
+                state.graceTimer = null;
+            }
+            state.waitingForSubmit = false;
+            forceEndGame();
+        } else {
+            // 正常模式，继续下一题
             setTimeout(showQuestion, 300);
         }
     }
@@ -8529,38 +8567,86 @@
         updateUI();
         showQuestion();
 
-        state.timerId = setInterval(() => {
-            state.timeLeft--;
-            updateUI();
-            if (state.timeLeft <= 0) {
-                endGame();
-            }
-        }, 1000);
+    state.timerId = setInterval(() => {
+        state.timeLeft--;
+        updateUI();
+        if (state.timeLeft <= 0) {
+            // 倒计时归零，触发“软结束”
+            clearInterval(state.timerId);
+            state.timerId = null;
+            enterGracePeriod();
+        }
+    }, 1000);
+
     }
 
-    function endGame() {
-        state.running = false;
+    function forceEndGame() {
+        if (state.finished) return;
         state.finished = true;
+        state.running = false;
+        state.waitingForSubmit = false;
+        
         if (state.timerId) {
             clearInterval(state.timerId);
             state.timerId = null;
         }
+        if (state.graceTimer) {
+            clearInterval(state.graceTimer);
+            state.graceTimer = null;
+        }
+        
         answerInput.disabled = true;
         submitBtn.disabled = true;
-        questionEl.textContent = '⏰ 时间到！';
+        questionEl.textContent = '⏰ 测试结束';
         feedback.textContent = '';
         feedback.className = 'feedback';
-
+        
         const rate = state.totalP / 60;
         state.finalRate = rate;
         finalRate.textContent = rate.toFixed(2);
         finalCorrect.textContent = state.correct;
         finalP.textContent = state.totalP;
         resultPanel.classList.add('show');
-
+        
         mainBtn.textContent = '🔄 再测一次';
         mainBtn.disabled = false;
         playerNameInput.disabled = false;
+    }
+    function enterGracePeriod() {
+        if (state.finished) return;
+        
+        state.timeUp = true;
+        state.waitingForSubmit = true;
+        
+        // 更新界面提示
+        questionEl.textContent = '⏰ 时间到！请提交当前题 (或直接点"放弃")';
+        feedback.textContent = '⚠️ 你还有 10 秒可以提交当前答案';
+        feedback.className = 'feedback wrong';
+        answerInput.disabled = false;   // 保持可输入
+        submitBtn.disabled = false;
+        // 禁用“开始”按钮，防止中途重开
+        mainBtn.disabled = true;
+        
+        // 启动一个 10 秒的宽限期计时器
+        let graceLeft = 10;
+        const graceInterval = setInterval(() => {
+            graceLeft--;
+            // 可以显示剩余宽限时间（可选）
+            // 这里我们只简单更新反馈信息
+            feedback.textContent = `⚠️ 还有 ${graceLeft} 秒，请提交或放弃`;
+            if (graceLeft <= 0) {
+                clearInterval(graceInterval);
+                // 宽限期结束，强制结束（当前题算0分）
+                if (!state.finished) {
+                    feedback.textContent = '⏰ 时间到，自动放弃当前题';
+                    // 当前这题不得分，直接结束
+                    state.waitingForSubmit = false;
+                    forceEndGame();
+                }
+            }
+        }, 1000);
+        // 保存宽限期 ID 以便可以提前清除（如果用户提交了）
+        state.graceTimer = graceInterval;
     }
 
     // ============================================================
