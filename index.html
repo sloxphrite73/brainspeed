@@ -254,6 +254,12 @@
         <button id="submitBtn" disabled>提交</button>
     </div>
 
+    <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 12px;">
+        <button id="abandonBtn" style="display: none; padding: 8px 20px; border: 1px solid #f87171; background: transparent; color: #f87171; border-radius: 40px; cursor: pointer; font-size: 14px; transition: 0.2s;">
+            🚫 放弃当前题
+        </button>
+    </div>
+
     <div class="feedback" id="feedback"></div>
 
     <!-- 昵称输入 -->
@@ -8451,6 +8457,7 @@
     const questionEl = document.getElementById('questionDisplay');
     const answerInput = document.getElementById('answerInput');
     const submitBtn = document.getElementById('submitBtn');
+    const abandonBtn = document.getElementById('abandonBtn');
     const mainBtn = document.getElementById('mainBtn');
     const correctDisplay = document.getElementById('correctDisplay');
     const pDisplay = document.getElementById('pDisplay');
@@ -8611,6 +8618,8 @@
         mainBtn.textContent = '🔄 再测一次';
         mainBtn.disabled = false;
         playerNameInput.disabled = false;
+        abandonBtn.style.display = 'none';
+        abandonBtn.disabled = true;
     }
     function enterGracePeriod() {
         if (state.finished) return;
@@ -8618,34 +8627,34 @@
         state.timeUp = true;
         state.waitingForSubmit = true;
         
-        // 更新界面提示
-        questionEl.textContent = '⏰ 时间到！请提交当前题 (或直接点"放弃")';
-        feedback.textContent = '⚠️ 你还有 10 秒可以提交当前答案';
+        // ✅ 不要覆盖题目，保留当前题目（questionEl 里已经有内容）
+        // 只更新反馈信息
+        feedback.textContent = '⏰ 时间到！你还有 10 秒可以提交当前答案，或点击"放弃"';
         feedback.className = 'feedback wrong';
-        answerInput.disabled = false;   // 保持可输入
-        submitBtn.disabled = false;
-        // 禁用“开始”按钮，防止中途重开
-        mainBtn.disabled = true;
         
-        // 启动一个 10 秒的宽限期计时器
+        // 保持输入框可用
+        answerInput.disabled = false;
+        submitBtn.disabled = false;
+        mainBtn.disabled = true;  // 禁止中途重开
+        
+        // 显示放弃按钮
+        abandonBtn.style.display = 'inline-block';
+        abandonBtn.disabled = false;
+        
+        // 启动宽限期计时器（10 秒）
         let graceLeft = 10;
         const graceInterval = setInterval(() => {
             graceLeft--;
-            // 可以显示剩余宽限时间（可选）
-            // 这里我们只简单更新反馈信息
-            feedback.textContent = `⚠️ 还有 ${graceLeft} 秒，请提交或放弃`;
+            feedback.textContent = `⏰ 时间到！还有 ${graceLeft} 秒，请提交或放弃`;
             if (graceLeft <= 0) {
                 clearInterval(graceInterval);
-                // 宽限期结束，强制结束（当前题算0分）
                 if (!state.finished) {
                     feedback.textContent = '⏰ 时间到，自动放弃当前题';
-                    // 当前这题不得分，直接结束
                     state.waitingForSubmit = false;
                     forceEndGame();
                 }
             }
         }, 1000);
-        // 保存宽限期 ID 以便可以提前清除（如果用户提交了）
         state.graceTimer = graceInterval;
     }
 
@@ -8719,6 +8728,23 @@
     // 5. 🎯 事件绑定 & 初始化
     // ============================================================
     submitBtn.addEventListener('click', handleSubmit);
+    abandonBtn.addEventListener('click', function() {
+    if (!state.waitingForSubmit) return; // 只有缓冲期才能放弃
+
+    // 清除宽限期计时器
+    if (state.graceTimer) {
+        clearInterval(state.graceTimer);
+        state.graceTimer = null;
+    }
+
+    // 显示反馈
+    feedback.textContent = '⏹️ 已放弃当前题，直接结算';
+    feedback.className = 'feedback wrong';
+
+    // 立即结束（当前题不得分）
+    state.waitingForSubmit = false;
+    forceEndGame();
+    });
     answerInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') handleSubmit();
     });
@@ -8739,6 +8765,8 @@
         mainBtn.textContent = '🚀 开始游戏';
         mainBtn.disabled = false;
         playerNameInput.disabled = false;
+        abandonBtn.style.display = 'none';
+        abandonBtn.disabled = true;
         updateUI();
         resultPanel.classList.remove('show');
         // 加载排行榜
