@@ -8874,40 +8874,53 @@
         function handleEndlessSubmit() {
             if (!state.running || state.finished) return;
             if (state.endlessDone >= 5) return;
+
             const val = parseInt(answerInput.value);
             if (isNaN(val)) {
                 feedback.textContent = '⚠️ 请输入数字';
                 feedback.className = 'feedback wrong';
                 return;
             }
-            const earned = calculatePartialP(state.currentAnswer, val, state.currentP);
 
-            state.endlessTotalP += earned;
-            state.endlessPInGroup += earned;
-            state.endlessDone++;
-            if (val === state.currentAnswer) {
+            const earned = calculatePartialP(state.currentAnswer, val, state.currentP);
+            const isCorrect = (val === state.currentAnswer);
+
+            if (isCorrect) {
+                // ✅ 完全正确：正常推进
                 state.endlessTotalCorrect++;
+                state.endlessTotalP += earned;
+                state.endlessPInGroup += earned;
+                state.endlessDone++;
+
                 feedback.textContent = `✅ 正确！+${earned.toFixed(1)} P (本题P=${state.currentP})`;
                 feedback.className = 'feedback correct';
-            } else {
-                feedback.textContent =
-                    `⚠️ 答案 ${state.currentAnswer}，差 ${Math.abs(val - state.currentAnswer)}，得 +${earned.toFixed(1)} P`;
-                feedback.className = 'feedback wrong';
-            }
-            updateEndlessUI();
-            if (state.endlessDone >= 5) {
-                if (state.endlessPInGroup >= 30) {
-                    feedback.textContent = `🎉 第 ${state.endlessGroup} 组完美通关！进入第 ${state.endlessGroup+1} 组！`;
-                    feedback.className = 'feedback info';
-                    setTimeout(() => enterEndlessGroup(state.endlessGroup + 1), 1200);
+                updateEndlessUI();
+
+                // 检查本组是否完成
+                if (state.endlessDone >= 5) {
+                    if (state.endlessPInGroup >= 30) {
+                        feedback.textContent = `🎉 第 ${state.endlessGroup} 组完成！进入第 ${state.endlessGroup+1} 组！`;
+                        feedback.className = 'feedback info';
+                        setTimeout(() => enterEndlessGroup(state.endlessGroup + 1), 1200);
+                    } else {
+                        // 理论上不会发生，但以防万一
+                        feedback.textContent = `⚠️ 本组P值 ${state.endlessPInGroup.toFixed(1)}/30，未达标，挑战结束！`;
+                        feedback.className = 'feedback wrong';
+                        endEndlessGame();
+                    }
                 } else {
-                    feedback.textContent = `⚠️ 本组P值 ${state.endlessPInGroup.toFixed(1)}/30，未达标，挑战结束！`;
-                    feedback.className = 'feedback wrong';
-                    endEndlessGame();
+                    // 继续下一题
+                    setTimeout(showEndlessQuestion, 400);
                 }
-                return;
+            } else {
+                // ❌ 答错：立即结束游戏，但仍给部分分
+                state.endlessTotalP += earned;
+                // 注意：正确数不变
+                feedback.textContent = `❌ 错误！答案 ${state.currentAnswer}，差 ${Math.abs(val - state.currentAnswer)}，得 +${earned.toFixed(1)} P，挑战结束！`;
+                feedback.className = 'feedback wrong';
+                updateEndlessUI();
+                endEndlessGame(); // 立即结算
             }
-            setTimeout(showEndlessQuestion, 400);
         }
 
         function startEndlessGame() {
